@@ -1,0 +1,6 @@
+{
+  "name": "簡易出貨單小幫手",
+  "description": "專為長輩設計，字體大、介面簡單的出貨單管理與展示工具，支援 QR Code 顯示，方便前往超商或物流掃碼出貨。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
