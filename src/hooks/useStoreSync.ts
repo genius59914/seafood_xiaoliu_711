@@ -104,11 +104,16 @@ export function useStoreSync() {
 
         // Listen to Orders
         unsubscribeOrders = onSnapshot(collection(db, 'stores', resolvedId, 'orders'), (snapshot) => {
-          const loadedOrders = snapshot.docs.map(d => ({
-            id: d.id,
-            ...d.data()
-            // We use string timestamps for local state easily
-          })) as Order[];
+          const loadedOrders = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              // Convert Firestore Timestamp to ISO string if needed, fallback to current time if optimistic pending write
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
+              updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString())
+            };
+          }) as Order[];
           setOrders(loadedOrders);
           setLoading(false);
         }, (err) => {
