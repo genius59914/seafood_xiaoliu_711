@@ -135,16 +135,16 @@ export function useStoreSync() {
     };
   }, [user]);
 
-  // Methods to modify orders mapped to Firestore
   const saveOrder = async (order: Order) => {
     if (!storeId || !user) return;
     const isNew = !orders.some(o => o.id === order.id);
     
     // According to blueprint, we need these strictly defined types
+    const sanitizedTracking = order.trackingNumber ? order.trackingNumber.replace(/[\s-]/g, '') : '';
     const orderDocData = {
-      orderNumber: order.orderNumber,
-      recipientName: order.recipientName,
-      trackingNumber: order.trackingNumber,
+      orderNumber: order.orderNumber || '',
+      recipientName: order.recipientName || '',
+      trackingNumber: sanitizedTracking,
       status: order.status || 'pending',
       products: order.products || '',
       items: order.items || [],
@@ -166,6 +166,7 @@ export function useStoreSync() {
       }
     } catch(err) {
        console.error("Save failed:", err);
+       alert("儲存失敗，請檢查網路連線或稍後再試");
     }
   };
 
