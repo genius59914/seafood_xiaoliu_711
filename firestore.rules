@@ -43,8 +43,8 @@ service cloud.firestore {
         && data.status in ['pending', 'shipped']
         && data.products is string && data.products.size() <= 1024
         && data.items is list && data.items.size() <= 50
-        && data.createdAt == request.time
-        && data.updatedAt == request.time
+        && (data.createdAt is timestamp || data.createdAt is string)
+        && (data.updatedAt is timestamp || data.updatedAt is string)
         && data.authorId == request.auth.uid;
     }
 
@@ -55,7 +55,7 @@ service cloud.firestore {
         && data.status in ['pending', 'shipped']
         && data.products is string && data.products.size() <= 1024
         && data.items is list && data.items.size() <= 50
-        && data.updatedAt == request.time
+        && (data.updatedAt is timestamp || data.updatedAt is string)
         && data.authorId == request.auth.uid
         && data.createdAt == existing().createdAt;
     }
