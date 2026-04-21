@@ -54,10 +54,9 @@ service cloud.firestore {
         && data.trackingNumber is string && data.trackingNumber.size() <= 128
         && data.status in ['pending', 'shipped']
         && data.products is string && data.products.size() <= 1024
-        && data.items is list && data.items.size() <= 50
+        && data.items is list && data.items.size() <= 100
         && (data.updatedAt is timestamp || data.updatedAt is string)
-        && data.authorId == request.auth.uid
-        && data.createdAt == existing().createdAt;
+        && data.authorId == request.auth.uid;
     }
 
     // --- RULES ---
