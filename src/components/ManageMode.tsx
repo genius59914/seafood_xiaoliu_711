@@ -14,10 +14,12 @@ const PRODUCT_OPTIONS = [
 
 export default function ManageMode({
   orders,
-  setOrders
+  onSaveOrder,
+  onDeleteOrder
 }: {
   orders: Order[];
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  onSaveOrder: (order: Order) => void;
+  onDeleteOrder: (id: string) => void;
 }) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -29,23 +31,22 @@ export default function ManageMode({
 
   const deleteOrder = (id: string, number: string) => {
     if (window.confirm(`確定要刪除「${number}」這筆訂單嗎？\n(刪除後無法復原)`)) {
-      setOrders(orders.filter(o => o.id !== id));
+      onDeleteOrder(id);
     }
   };
 
   const handleSave = (order: Order) => {
-    if (isAdding) {
-      setOrders([order, ...orders]);
-    } else {
-      setOrders(orders.map(o => o.id === order.id ? order : o));
-    }
+    onSaveOrder(order);
     setEditingOrder(null);
     setIsAdding(false);
   };
 
   const toggleStatus = (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'pending' ? 'shipped' : 'pending';
-    setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+    const orderToUpdate = orders.find(o => o.id === id);
+    if (orderToUpdate) {
+       onSaveOrder({ ...orderToUpdate, status: newStatus as any });
+    }
   };
 
 

@@ -1,0 +1,97 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} { 
+      allow read, write: if false; 
+    }
+
+    // --- PRIMITIVES ---
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isOwner(storeId) { 
+      return isSignedIn() && exists(/databases/$(database)/documents/stores/$(storeId)) 
+          && get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid; 
+    }
+    function isMember(storeId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/stores/$(storeId))
+          && request.auth.token.email in get(/databases/$(database)/documents/stores/$(storeId)).data.allowedEmails;
+    }
+
+    // --- BLUEPRINTS ---
+    function isValidStore(data) {
+      return data.keys().hasAll(['name', 'ownerId', 'allowedEmails', 'createdAt'])
+        && data.keys().size() == 4
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 64
+        && data.ownerId == request.auth.uid
+        && data.allowedEmails is list && data.allowedEmails.size() <= 20
+        && (data.allowedEmails.size() == 0 || data.allowedEmails[0] is string)
+        && data.createdAt == request.time;
+    }
+
+    function isValidOrderCreate(data) {
+      return data.keys().hasAll(['orderNumber', 'recipientName', 'trackingNumber', 'status', 'products', 'items', 'createdAt', 'updatedAt', 'authorId'])
+        && data.keys().size() == 9
+        && data.orderNumber is string && data.orderNumber.size() <= 64
+        && data.recipientName is string && data.recipientName.size() <= 64
+        && data.trackingNumber is string && data.trackingNumber.size() <= 128
+        && data.status in ['pending', 'shipped']
+        && data.products is string && data.products.size() <= 1024
+        && data.items is list && data.items.size() <= 50
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && data.authorId == request.auth.uid;
+    }
+
+    function isValidOrderUpdate(data) {
+      return data.orderNumber is string && data.orderNumber.size() <= 64
+        && data.recipientName is string && data.recipientName.size() <= 64
+        && data.trackingNumber is string && data.trackingNumber.size() <= 128
+        && data.status in ['pending', 'shipped']
+        && data.products is string && data.products.size() <= 1024
+        && data.items is list && data.items.size() <= 50
+        && data.updatedAt == request.time
+        && data.authorId == request.auth.uid
+        && data.createdAt == existing().createdAt;
+    }
+
+    // --- RULES ---
+    match /stores/{storeId} {
+      allow read: if true;
+      
+      allow create: if isSignedIn() && isValidId(storeId) && isValidStore(incoming());
+      
+      allow update: if isSignedIn() && isValidId(storeId) && existing().ownerId == request.auth.uid
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'allowedEmails'])
+          && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 64
+          && incoming().allowedEmails is list && incoming().allowedEmails.size() <= 20
+          && (incoming().allowedEmails.size() == 0 || incoming().allowedEmails[0] is string);
+          
+      allow delete: if false; // Prevention of accidental deletes
+    }
+
+    match /stores/{storeId}/orders/{orderId} {
+      allow read: if true;
+
+      allow create: if isSignedIn() && isValidId(storeId) && isValidId(orderId)
+          && (isOwner(storeId) || isMember(storeId))
+          && exists(/databases/$(database)/documents/stores/$(storeId))
+          && isValidOrderCreate(incoming());
+
+      allow update: if isSignedIn() && isValidId(storeId) && isValidId(orderId)
+          && (isOwner(storeId) || isMember(storeId))
+          && isValidOrderUpdate(incoming())
+          && (
+            (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'authorId']) && incoming().status in ['pending', 'shipped']) ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['orderNumber', 'recipientName', 'trackingNumber', 'products', 'items', 'status', 'updatedAt', 'authorId']))
+          );
+
+      allow delete: if isSignedIn() && isValidId(storeId) && isValidId(orderId) && (isOwner(storeId) || isMember(storeId));
+    }
+  }
+}

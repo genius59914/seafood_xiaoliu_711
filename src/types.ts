@@ -14,4 +14,6 @@ export interface Order {
   items?: OrderItem[];
   status: 'pending' | 'shipped';
   createdAt: string;
+  updatedAt: string;
+  authorId: string;
 }

@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "Store": {
+      "title": "Store",
+      "description": "A workspace for a family or shop.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the store."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "User ID of the store creator."
+        },
+        "allowedEmails": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of invited emails."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of creation."
+        }
+      },
+      "required": ["name", "ownerId", "allowedEmails", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A shipping order record.",
+      "type": "object",
+      "properties": {
+        "orderNumber": {
+          "type": "string",
+          "description": "Human-readable order identifier."
+        },
+        "recipientName": {
+          "type": "string",
+          "description": "Name of the person receiving the package."
+        },
+        "trackingNumber": {
+          "type": "string",
+          "description": "Shipping provider tracking code."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "shipped"],
+          "description": "Current shipping status."
+        },
+        "products": {
+          "type": "string",
+          "description": "Legacy fallback or freeform text."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unit": { "type": "string" }
+            }
+          },
+          "description": "List of grouped product items."
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "authorId": {
+          "type": "string",
+          "description": "The user who created or last modified the order."
+        }
+      },
+      "required": ["orderNumber", "recipientName", "trackingNumber", "status", "createdAt", "updatedAt", "authorId"]
+    }
+  },
+  "firestore": {
+    "/stores/{storeId}": {
+      "schema": {
+        "$ref": "#/entities/Store"
+      },
+      "description": "The root workspace for a family to share orders."
+    },
+    "/stores/{storeId}/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/Order"
+      },
+      "description": "Orders within a family workspace."
+    }
+  }
+}
