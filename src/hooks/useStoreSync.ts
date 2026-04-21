@@ -56,28 +56,28 @@ export function useStoreSync() {
               allowedEmails: [],
               createdAt: serverTimestamp()
             });
+          }
             
-            // Migrate local storage data!
-            const saved = localStorage.getItem('orders');
-            if (saved) {
-               try {
-                  const parsed = JSON.parse(saved);
-                  for (let o of parsed) {
-                     await setDoc(doc(db, 'stores', resolvedId, 'orders', o.id), {
-                        orderNumber: o.orderNumber || '',
-                        recipientName: o.recipientName || '',
-                        trackingNumber: o.trackingNumber || '',
-                        products: o.products || '',
-                        items: o.items || [],
-                        status: o.status || 'pending',
-                        createdAt: o.createdAt || new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        authorId: user.uid
-                     });
-                  }
-                  localStorage.removeItem('orders');
-               } catch(e) { console.error("Migration failed", e); }
-            }
+          // Migrate local storage data (always check, just in case user logged in after creating local orders but already had a store)!
+          const saved = localStorage.getItem('orders');
+          if (saved) {
+             try {
+                const parsed = JSON.parse(saved);
+                for (let o of parsed) {
+                   await setDoc(doc(db, 'stores', resolvedId, 'orders', o.id), {
+                      orderNumber: o.orderNumber || '',
+                      recipientName: o.recipientName || '',
+                      trackingNumber: o.trackingNumber || '',
+                      products: o.products || '',
+                      items: o.items || [],
+                      status: o.status || 'pending',
+                      createdAt: o.createdAt || new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                      authorId: user.uid
+                   });
+                }
+                localStorage.removeItem('orders');
+             } catch(e) { console.error("Migration failed", e); }
           }
         } else {
           // No user logged in? Because this applet acts as a single-family backend, fetch the first available store
