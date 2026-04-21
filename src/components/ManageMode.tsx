@@ -9,6 +9,7 @@ const PRODUCT_OPTIONS = [
   { name: '胭脂蝦', unit: '公斤' },
   { name: '角蝦', unit: '公斤' },
   { name: '透抽', unit: '包' },
+  { name: '白蝦(大盒)', unit: '盒' },
 ];
 
 export default function ManageMode({
