@@ -79,16 +79,11 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && isValidId(storeId) && isValidId(orderId)
           && (isOwner(storeId) || isMember(storeId))
-          && exists(/databases/$(database)/documents/stores/$(storeId))
           && isValidOrderCreate(incoming());
 
       allow update: if isSignedIn() && isValidId(storeId) && isValidId(orderId)
           && (isOwner(storeId) || isMember(storeId))
-          && isValidOrderUpdate(incoming())
-          && (
-            (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'authorId']) && incoming().status in ['pending', 'shipped']) ||
-            (incoming().diff(existing()).affectedKeys().hasOnly(['orderNumber', 'recipientName', 'trackingNumber', 'products', 'items', 'status', 'updatedAt', 'authorId']))
-          );
+          && isValidOrderUpdate(incoming());
 
       allow delete: if isSignedIn() && isValidId(storeId) && isValidId(orderId) && (isOwner(storeId) || isMember(storeId));
     }
