@@ -6,7 +6,8 @@ import { formatTrackingNumber } from './ViewMode';
 const PRODUCT_OPTIONS = [
   { name: '牡丹蝦', unit: '公斤' },
   { name: '葡萄蝦', unit: '公斤' },
-  { name: '胭脂蝦', unit: '公斤' },
+  { name: '胭脂蝦-中', unit: '公斤' },
+  { name: '胭脂蝦-大', unit: '公斤' },
   { name: '角蝦', unit: '公斤' },
   { name: '透抽', unit: '包' },
   { name: '白蝦(大盒)', unit: '盒' },
@@ -161,20 +162,20 @@ function OrderListView({
                   {formatTrackingNumber(order.trackingNumber)}
                 </span>
               </div>
-              <div className="flex flex-row gap-2 md:gap-4 md:ml-4 flex-wrap">
+              <div className="flex flex-col md:flex-row gap-2 md:gap-4 flex-wrap">
                 <button 
                   onClick={() => toggleStatus(order.id, order.status)}
-                  className={`flex-1 justify-center font-bold text-xl px-4 py-3 rounded-xl whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+                  className={`w-full md:w-auto justify-center font-bold text-lg px-4 py-3 rounded-xl whitespace-nowrap flex items-center gap-2 active:scale-95 ${
                     order.status === 'pending' ? 'bg-green-100 text-green-700 active:bg-green-200' : 'bg-slate-100 text-slate-600 active:bg-slate-200'
                   }`}
                 >
                   {order.status === 'pending' ? <><PackageCheck size={20}/> 標記已出貨</> : <><RotateCcw size={20}/> 改回待出貨</>}
                 </button>
                 <div className="flex gap-2 w-full md:w-auto">
-                   <button onClick={() => setEditingOrder(order)} className="text-blue-500 flex-1 justify-center font-bold text-xl px-6 py-3 bg-blue-50 rounded-xl whitespace-nowrap active:bg-blue-100">
+                   <button onClick={() => setEditingOrder(order)} className="text-blue-500 flex-1 md:flex-none justify-center font-bold text-lg px-6 py-3 bg-blue-50 rounded-xl whitespace-nowrap active:bg-blue-100">
                      編輯
                    </button>
-                   <button onClick={() => deleteOrder(order.id, order.orderNumber)} className="text-red-500 flex-1 justify-center font-bold text-xl px-6 py-3 bg-red-50 rounded-xl whitespace-nowrap active:bg-red-100">
+                   <button onClick={() => deleteOrder(order.id, order.orderNumber)} className="text-red-500 flex-1 md:flex-none justify-center font-bold text-lg px-6 py-3 bg-red-50 rounded-xl whitespace-nowrap active:bg-red-100">
                      刪除
                    </button>
                 </div>
@@ -256,11 +257,17 @@ function StatsView({ orders }: { orders: Order[] }) {
     return toISODate(d);
   });
   const [endDate, setEndDate] = useState(toISODate(new Date()));
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'shipped'>('all');
 
   const stats = useMemo(() => {
      const filtered = orders.filter(o => {
         const oDateStr = toISODate(new Date(o.createdAt));
-        return oDateStr >= startDate && oDateStr <= endDate;
+        const matchesDate = oDateStr >= startDate && oDateStr <= endDate;
+        if (!matchesDate) return false;
+        
+        if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+        
+        return true;
      });
      
      const results: Record<string, { quantity: number, unit: string }> = {};
@@ -275,11 +282,27 @@ function StatsView({ orders }: { orders: Order[] }) {
         }
      });
      return { results, orderCount: filtered.length };
-  }, [orders, startDate, endDate]);
+  }, [orders, startDate, endDate, statusFilter]);
 
   return (
     <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex flex-col gap-6">
-       <h3 className="text-xl font-black text-slate-800">銷售統計 (所有訂單)</h3>
+       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+         <h3 className="text-xl font-black text-slate-800">銷售統計</h3>
+         <div className="flex gap-2">
+            <button 
+               onClick={() => setStatusFilter('all')}
+               className={`flex-1 sm:flex-none px-4 py-2 rounded-xl font-bold transition-colors ${statusFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >全部</button>
+            <button 
+               onClick={() => setStatusFilter('pending')}
+               className={`flex-1 sm:flex-none px-4 py-2 rounded-xl font-bold transition-colors ${statusFilter === 'pending' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >待出貨</button>
+            <button 
+               onClick={() => setStatusFilter('shipped')}
+               className={`flex-1 sm:flex-none px-4 py-2 rounded-xl font-bold transition-colors ${statusFilter === 'shipped' ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+            >已出貨</button>
+         </div>
+       </div>
        <div className="flex flex-col md:flex-row gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
          <div className="flex-1 flex flex-col gap-2">
             <label className="text-sm font-bold text-slate-500 uppercase tracking-widest">起始日期</label>
