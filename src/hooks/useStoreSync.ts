@@ -107,10 +107,12 @@ export function useStoreSync() {
           const loadedOrders = snapshot.docs.map(d => {
             const data = d.data();
             
-            // Migrate old 胭脂蝦 names
+            // Migrate old 胭脂蝦 and 葡萄蝦 names
             const migratedItems = data.items ? data.items.map((item: any) => {
               let newName = item.name;
-              if (newName === '胭脂蝦' || newName === '胭脂蝦-中600') {
+              if (newName === '葡萄蝦') {
+                 newName = '葡萄蝦-中';
+              } else if (newName === '胭脂蝦' || newName === '胭脂蝦-中600') {
                  newName = '胭脂蝦-中';
               } else if (newName === '胭脂蝦-大800') {
                  newName = '胭脂蝦-大';
@@ -119,6 +121,7 @@ export function useStoreSync() {
             }) : [];
             
             let migratedProducts = data.products || '';
+            migratedProducts = migratedProducts.replace(/葡萄蝦(?!-)/g, '葡萄蝦-中');
             migratedProducts = migratedProducts.replace(/胭脂蝦-中600/g, '胭脂蝦-中');
             migratedProducts = migratedProducts.replace(/胭脂蝦-大800/g, '胭脂蝦-大');
             migratedProducts = migratedProducts.replace(/胭脂蝦(?!-)/g, '胭脂蝦-中');
