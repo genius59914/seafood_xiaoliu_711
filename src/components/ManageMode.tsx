@@ -5,9 +5,12 @@ import { formatTrackingNumber } from './ViewMode';
 
 const PRODUCT_OPTIONS = [
   { name: '牡丹蝦', unit: '公斤' },
-  { name: '葡萄蝦', unit: '公斤' },
+  { name: '葡萄蝦-中', unit: '公斤' },
+  { name: '葡萄蝦-大', unit: '公斤' },
+  { name: '葡萄蝦-特大', unit: '公斤' },
   { name: '胭脂蝦-中', unit: '公斤' },
   { name: '胭脂蝦-大', unit: '公斤' },
+  { name: '胭脂蝦-特大', unit: '公斤' },
   { name: '角蝦', unit: '公斤' },
   { name: '透抽', unit: '包' },
   { name: '白蝦(大盒)', unit: '盒' },
@@ -472,7 +475,8 @@ function OrderForm({
           <div className="w-full sm:w-1/3 flex items-center gap-3">
              <input 
                type="number"
-               min="1"
+               min="0.5"
+               step="0.5"
                value={itemQty}
                onChange={e => setItemQty(e.target.value)}
                className="w-full bg-slate-50 border-2 border-slate-200 rounded-[16px] px-5 py-4 text-2xl font-bold text-slate-800 focus:outline-none focus:border-blue-500 text-center"
