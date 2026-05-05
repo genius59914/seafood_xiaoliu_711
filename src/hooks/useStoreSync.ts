@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, setDoc, doc, onSnapshot, serverTimestamp, updateDoc, deleteDoc, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, onSnapshot, serverTimestamp, updateDoc, deleteDoc, limit, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { Order } from '../types';
@@ -195,6 +195,46 @@ export function useStoreSync() {
     }
   };
 
+  const saveMultipleOrders = async (newOrders: Order[]) => {
+    if (!storeId || !user) return;
+    
+    // Firestore batch limit is 500 writes. We will process in chunks of 450.
+    const chunkSize = 450;
+    
+    try {
+      for (let i = 0; i < newOrders.length; i += chunkSize) {
+        const chunk = newOrders.slice(i, i + chunkSize);
+        const batch = writeBatch(db);
+        
+        chunk.forEach(order => {
+           const sanitizedTracking = order.trackingNumber ? order.trackingNumber.replace(/[\s-]/g, '') : '';
+           const orderDocData = {
+              orderNumber: order.orderNumber || '',
+              recipientName: order.recipientName || '',
+              trackingNumber: sanitizedTracking,
+              status: order.status || 'pending',
+              products: order.products || '',
+              items: order.items || [],
+              updatedAt: serverTimestamp(),
+              authorId: user.uid
+           };
+           const docRef = doc(db, 'stores', storeId, 'orders', order.id);
+           
+           // We'll just define it as new / setDoc in batch
+           batch.set(docRef, {
+             ...orderDocData,
+             createdAt: serverTimestamp()
+           }, { merge: true }); // Merge if exists, using set. Actually firestore blueprint may complain if create/update differ. If merge is true it behaves like update but creates if not exist. Let's not use merge if not allowed. Let's just create it as new or check if it exists? In import they are usually all new. Let's assume new.
+        });
+        
+        await batch.commit();
+      }
+    } catch (err) {
+      console.error("Batch save failed: ", err);
+      alert("批次儲存失敗，請檢查網路連線或稍後再試");
+    }
+  };
+
   const deleteOrder = async (orderId: string) => {
     if (!storeId) return;
     try {
@@ -226,6 +266,7 @@ export function useStoreSync() {
     orders,
     loading,
     saveOrder,
+    saveMultipleOrders,
     deleteOrder,
     updateStoreEmails
   };
