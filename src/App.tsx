@@ -7,7 +7,7 @@ import { useStoreSync } from './hooks/useStoreSync';
 import { signInWithGoogle, signOut } from './lib/firebase';
 
 export default function App() {
-  const { user, storeId, orders, loading, saveOrder, deleteOrder, updateStoreEmails, storeData } = useStoreSync();
+  const { user, storeId, orders, loading, saveOrder, saveMultipleOrders, deleteOrder, updateStoreEmails, storeData } = useStoreSync();
   const [activeTab, setActiveTab] = useState<'view' | 'manage'>('view');
   const [showInviteModal, setShowInviteModal] = useState(false);
 
@@ -73,7 +73,12 @@ export default function App() {
                </button>
             </div>
         </div>
-        <ManageMode orders={orders} onSaveOrder={saveOrder} onDeleteOrder={deleteOrder} />
+        <ManageMode 
+          orders={orders} 
+          onSaveOrder={saveOrder} 
+          onSaveMultipleOrders={saveMultipleOrders}
+          onDeleteOrder={deleteOrder} 
+        />
       </div>
     );
   };
