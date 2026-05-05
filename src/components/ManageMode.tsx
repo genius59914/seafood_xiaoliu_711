@@ -96,8 +96,20 @@ export default function ManageMode({
         const wsname = workbook.SheetNames[0];
         const ws = workbook.Sheets[wsname];
         
+        // Find header row automatically
+        const rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
+        let headerRowIndex = 0;
+        for (let i = 0; i < Math.min(15, rawData.length); i++) {
+            const rowArr = rawData[i] || [];
+            const rowStr = rowArr.join('').replace(/\s+/g, '');
+            if (rowStr.includes('收件人') || rowStr.includes('訂單編號') || rowStr.includes('寄件編號') || rowStr.includes('配送單編號')) {
+                headerRowIndex = i;
+                break;
+            }
+        }
+
         // Convert to JSON
-        const data = XLSX.utils.sheet_to_json<any>(ws, { defval: '' });
+        const data = XLSX.utils.sheet_to_json<any>(ws, { defval: '', range: headerRowIndex });
         if (data.length === 0) {
           alert('Excel 檔案內沒有資料');
           return;
@@ -111,7 +123,7 @@ export default function ManageMode({
         data.forEach((row, index) => {
            let orderNum = row['訂單編號'] || row['訂單號碼'];
            let recipient = row['收件人'] || row['收件人姓名'] || row['取貨人'] || row['買家姓名'];
-           let tracking = row['配送單編號'] || row['寄件編號'] || row['交貨便服務單號'] || row['服務單號'] || row['包裹查詢號碼'] || '';
+           let tracking = String(row['配送單編號'] || row['寄件編號'] || row['交貨便服務單號'] || row['服務單號'] || row['包裹查詢號碼'] || '').trim();
            
            if (orderNum) lastOrderNum = String(orderNum);
            else orderNum = lastOrderNum || `匯入-${Date.now()}-${index}`;
@@ -119,8 +131,11 @@ export default function ManageMode({
            if (recipient) lastRecipient = String(recipient);
            else recipient = lastRecipient;
 
-           if (tracking !== undefined && tracking !== '') lastTracking = String(tracking);
-           else tracking = lastTracking;
+           if (tracking) {
+               lastTracking = tracking;
+           } else {
+               tracking = lastTracking || '待取號';
+           }
 
            let rawProductStr = String(row['商品名稱(品名/規格)'] || row['商品明細'] || row['規格'] || row['商品名稱'] || row['商品'] || '');
            let quantity = Number(row['數量']) || 1;
