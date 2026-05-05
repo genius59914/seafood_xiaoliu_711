@@ -91,105 +91,136 @@ export default function ManageMode({
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const arrayBuffer = evt.target?.result as ArrayBuffer;
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const wsname = workbook.SheetNames[0];
         const ws = workbook.Sheets[wsname];
         
-        // Find header row automatically
         const rawData = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
-        let headerRowIndex = 0;
-        for (let i = 0; i < Math.min(15, rawData.length); i++) {
-            const rowArr = rawData[i] || [];
-            const rowStr = rowArr.join('').replace(/\s+/g, '');
-            if (rowStr.includes('收件人') || rowStr.includes('訂單編號') || rowStr.includes('寄件編號') || rowStr.includes('配送單編號')) {
-                headerRowIndex = i;
+        if (rawData.length === 0) {
+          alert('Excel 檔案內沒有資料');
+          return;
+        }
+
+        let headerIdx = -1;
+        let colMap: Record<string, number> = {};
+
+        for (let i = 0; i < Math.min(20, rawData.length); i++) {
+            const row = rawData[i] || [];
+            let foundNames = 0;
+            const tempMap: Record<string, number> = {};
+            for (let j = 0; j < row.length; j++) {
+                const cellValue = String(row[j] || '').replace(/\s+/g, '');
+                if (cellValue) { tempMap[cellValue] = j; }
+                if (cellValue.includes('收件人') || cellValue.includes('取貨人') || cellValue.includes('買家姓名')) foundNames++;
+                if (cellValue.includes('訂單編號') || cellValue.includes('訂單號碼')) foundNames++;
+                if (cellValue.includes('商品')) foundNames++;
+            }
+            if (foundNames >= 2) {
+                headerIdx = i;
+                colMap = tempMap;
                 break;
             }
         }
 
-        // Convert to JSON
-        const data = XLSX.utils.sheet_to_json<any>(ws, { defval: '', range: headerRowIndex });
-        if (data.length === 0) {
-          alert('Excel 檔案內沒有資料');
-          return;
+        if (headerIdx === -1) {
+            alert('找不到表頭欄位 (需包含 收件人/訂單編號/商品 等欄位)');
+            return;
         }
+
+        const getColIdx = (possibleNames: string[]) => {
+            for (const name of possibleNames) {
+                for (const [key, idx] of Object.entries(colMap)) {
+                    if (key.includes(name)) return idx;
+                }
+            }
+            return -1;
+        };
 
         const parsedOrders: Order[] = [];
         let lastOrderNum = '';
         let lastRecipient = '';
         let lastTracking = '';
 
-        data.forEach((row, index) => {
-           let orderNum = row['訂單編號'] || row['訂單號碼'];
-           let recipient = row['收件人'] || row['收件人姓名'] || row['取貨人'] || row['買家姓名'];
-           let tracking = String(row['配送單編號'] || row['寄件編號'] || row['交貨便服務單號'] || row['服務單號'] || row['包裹查詢號碼'] || '').trim();
-           
-           if (orderNum) lastOrderNum = String(orderNum);
-           else orderNum = lastOrderNum || `匯入-${Date.now()}-${index}`;
+        for (let i = headerIdx + 1; i < rawData.length; i++) {
+            const rowArr = rawData[i] || [];
+            if (rowArr.join('').trim() === '') continue; // Skip empty rows
 
-           if (recipient) lastRecipient = String(recipient);
-           else recipient = lastRecipient;
+            const getVal = (possibleKeys: string[]) => {
+                const idx = getColIdx(possibleKeys);
+                if (idx !== -1) return rowArr[idx];
+                return '';
+            };
 
-           if (tracking) {
-               lastTracking = tracking;
-           } else {
-               tracking = lastTracking || '待取號';
-           }
+            let orderNum = getVal(['訂單編號', '訂單號碼']);
+            let recipient = getVal(['收件人', '取貨人', '買家姓名']);
+            let tracking = String(getVal(['配送單編號', '寄件編號', '交貨便服務單號', '服務單號', '包裹查詢號碼']) || '').trim();
+            let rawProductStr = String(getVal(['商品名稱', '品名', '商品明細', '規格', '商品']) || '');
+            let quantity = Number(getVal(['數量'])) || 1;
 
-           let rawProductStr = String(row['商品名稱(品名/規格)'] || row['商品明細'] || row['規格'] || row['商品名稱'] || row['商品'] || '');
-           let quantity = Number(row['數量']) || 1;
-           let productStrText = rawProductStr;
-           if (rawProductStr && quantity > 1) {
-             productStrText = `${rawProductStr} x${quantity}`;
-           }
+            if (orderNum) lastOrderNum = String(orderNum);
+            else orderNum = lastOrderNum || `匯入-${Date.now()}-${i}`;
 
-           if (!recipient) {
-             console.warn('Skipping row due to missing recipient:', row);
-             return;
-           }
-           
-           let existingOrder = parsedOrders.find(o => o.orderNumber === String(orderNum));
-           if (!existingOrder) {
-             existingOrder = {
-               id: Date.now().toString() + Math.random().toString().slice(2, 6),
-               orderNumber: String(orderNum),
-               recipientName: String(recipient),
-               trackingNumber: String(tracking),
-               status: 'pending',
-               products: '',
-               items: [], 
-               createdAt: new Date().toISOString(),
-               updatedAt: new Date().toISOString()
-             } as Order;
-             parsedOrders.push(existingOrder);
-           }
-           
-           if (rawProductStr) {
-               existingOrder.products = existingOrder.products ? `${existingOrder.products}\n${productStrText}` : productStrText;
-               
-               const simplifiedName = simplifyProductName(rawProductStr);
-               const matchedOption = PRODUCT_OPTIONS.find(p => p.name === simplifiedName);
-               
-               if (!existingOrder.items) existingOrder.items = [];
-               
-               if (matchedOption) {
-                   existingOrder.items.push({
-                       id: Date.now().toString() + Math.random().toString().slice(2,8),
-                       name: matchedOption.name,
-                       quantity: quantity,
-                       unit: matchedOption.unit
-                   });
-               } else if (simplifiedName) {
-                   existingOrder.items.push({
-                       id: Date.now().toString() + Math.random().toString().slice(2,8),
-                       name: String(simplifiedName),
-                       quantity: quantity,
-                       unit: '件'
-                   });
-               }
-           }
-        });
+            if (recipient) lastRecipient = String(recipient);
+            else recipient = lastRecipient;
+
+            if (tracking) {
+                lastTracking = tracking;
+            } else {
+                tracking = lastTracking || '待取號';
+            }
+
+            let productStrText = rawProductStr;
+            if (rawProductStr && quantity > 1) {
+                productStrText = `${rawProductStr} x${quantity}`;
+            }
+
+            if (!recipient) {
+                console.warn('Skipping row due to missing recipient:', rowArr);
+                continue;
+            }
+
+            let existingOrder = parsedOrders.find(o => o.orderNumber === String(orderNum));
+            if (!existingOrder) {
+                existingOrder = {
+                    id: Date.now().toString() + Math.random().toString().slice(2, 6),
+                    orderNumber: String(orderNum),
+                    recipientName: String(recipient),
+                    trackingNumber: String(tracking),
+                    status: 'pending',
+                    products: '',
+                    items: [], 
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                } as Order;
+                parsedOrders.push(existingOrder);
+            }
+            
+            if (rawProductStr) {
+                existingOrder.products = existingOrder.products ? `${existingOrder.products}\n${productStrText}` : productStrText;
+                
+                const simplifiedName = simplifyProductName(rawProductStr);
+                const matchedOption = PRODUCT_OPTIONS.find(p => p.name === simplifiedName);
+                
+                if (!existingOrder.items) existingOrder.items = [];
+                
+                if (matchedOption) {
+                    existingOrder.items.push({
+                        id: Date.now().toString() + Math.random().toString().slice(2,8),
+                        name: matchedOption.name,
+                        quantity: quantity,
+                        unit: matchedOption.unit
+                    });
+                } else if (simplifiedName) {
+                    existingOrder.items.push({
+                        id: Date.now().toString() + Math.random().toString().slice(2,8),
+                        name: String(simplifiedName),
+                        quantity: quantity,
+                        unit: '件'
+                    });
+                }
+            }
+        }
 
         if (parsedOrders.length === 0) {
           alert('找不到符合的訂單資料。請確保 Excel 首列有包含類似「收件人」、「寄件編號」等欄位名稱。');
@@ -200,13 +231,14 @@ export default function ManageMode({
            onSaveMultipleOrders(parsedOrders);
            alert(`批次匯入指令已送出，請稍後檢查清單。`);
         }
+
       } catch (err) {
         console.error('File parsing error:', err);
         alert('檔案讀取失敗，請確認檔案格式是否正確。');
       }
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
 
