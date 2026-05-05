@@ -1,31 +1,61 @@
 import React, { useState, useMemo } from 'react';
 import { Order } from '../types';
-import { Plus, Edit3, Trash2, X, Check, LayoutGrid, List as ListIcon, Trash, CalendarSearch, PackageCheck, Package, RotateCcw } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Check, LayoutGrid, List as ListIcon, Trash, CalendarSearch, PackageCheck, Package, RotateCcw, Upload } from 'lucide-react';
 import { formatTrackingNumber } from './ViewMode';
+import * as XLSX from 'xlsx';
 
 const PRODUCT_OPTIONS = [
   { name: '牡丹蝦', unit: '公斤' },
+  { name: '葡萄蝦-小', unit: '公斤' },
   { name: '葡萄蝦-中', unit: '公斤' },
   { name: '葡萄蝦-大', unit: '公斤' },
   { name: '葡萄蝦-特大', unit: '公斤' },
+  { name: '胭脂蝦-小', unit: '公斤' },
   { name: '胭脂蝦-中', unit: '公斤' },
   { name: '胭脂蝦-大', unit: '公斤' },
   { name: '胭脂蝦-特大', unit: '公斤' },
+  { name: '角蝦-小', unit: '公斤' },
   { name: '角蝦-中', unit: '公斤' },
   { name: '角蝦-大', unit: '公斤' },
+  { name: '角蝦-特大', unit: '公斤' },
   { name: '透抽', unit: '包' },
   { name: '白蝦(大盒)', unit: '盒' },
 ];
 
+const simplifyProductName = (rawName: string) => {
+    let name = String(rawName || '');
+    if (name.includes('葡萄蝦')) name = '葡萄蝦';
+    else if (name.includes('胭脂蝦')) name = '胭脂蝦';
+    else if (name.includes('角蝦')) name = '角蝦';
+    else if (name.includes('牡丹蝦')) name = '牡丹蝦';
+    else if (name.includes('透抽')) return '透抽';
+    else if (name.includes('白蝦')) return '白蝦(大盒)';
+    else return rawName;
+
+    if (rawName.includes('特大')) return `${name}-特大`;
+    if (rawName.includes('大')) return `${name}-大`;
+    if (rawName.includes('中')) return `${name}-中`;
+    if (rawName.includes('小')) return `${name}-小`;
+    
+    if (name === '角蝦') return '角蝦-中';
+    if (name === '葡萄蝦') return '葡萄蝦-中';
+    if (name === '胭脂蝦') return '胭脂蝦-中';
+    
+    return name;
+};
+
 export default function ManageMode({
   orders,
   onSaveOrder,
+  onSaveMultipleOrders,
   onDeleteOrder
 }: {
   orders: Order[];
   onSaveOrder: (order: Order) => void;
+  onSaveMultipleOrders: (orders: Order[]) => void;
   onDeleteOrder: (id: string) => void;
 }) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [displayMode, setDisplayMode] = useState<'card' | 'list'>('card');
@@ -52,6 +82,116 @@ export default function ManageMode({
     if (orderToUpdate) {
        onSaveOrder({ ...orderToUpdate, status: newStatus as any });
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const wsname = workbook.SheetNames[0];
+        const ws = workbook.Sheets[wsname];
+        
+        // Convert to JSON
+        const data = XLSX.utils.sheet_to_json<any>(ws, { defval: '' });
+        if (data.length === 0) {
+          alert('Excel 檔案內沒有資料');
+          return;
+        }
+
+        const parsedOrders: Order[] = [];
+        let lastOrderNum = '';
+        let lastRecipient = '';
+        let lastTracking = '';
+
+        data.forEach((row, index) => {
+           let orderNum = row['訂單編號'] || row['訂單號碼'];
+           let recipient = row['收件人'] || row['收件人姓名'] || row['取貨人'] || row['買家姓名'];
+           let tracking = row['配送單編號'] || row['寄件編號'] || row['交貨便服務單號'] || row['服務單號'] || row['包裹查詢號碼'] || '';
+           
+           if (orderNum) lastOrderNum = String(orderNum);
+           else orderNum = lastOrderNum || `匯入-${Date.now()}-${index}`;
+
+           if (recipient) lastRecipient = String(recipient);
+           else recipient = lastRecipient;
+
+           if (tracking !== undefined && tracking !== '') lastTracking = String(tracking);
+           else tracking = lastTracking;
+
+           let rawProductStr = String(row['商品名稱(品名/規格)'] || row['商品明細'] || row['規格'] || row['商品名稱'] || row['商品'] || '');
+           let quantity = Number(row['數量']) || 1;
+           let productStrText = rawProductStr;
+           if (rawProductStr && quantity > 1) {
+             productStrText = `${rawProductStr} x${quantity}`;
+           }
+
+           if (!recipient) {
+             console.warn('Skipping row due to missing recipient:', row);
+             return;
+           }
+           
+           let existingOrder = parsedOrders.find(o => o.orderNumber === String(orderNum));
+           if (!existingOrder) {
+             existingOrder = {
+               id: Date.now().toString() + Math.random().toString().slice(2, 6),
+               orderNumber: String(orderNum),
+               recipientName: String(recipient),
+               trackingNumber: String(tracking),
+               status: 'pending',
+               products: '',
+               items: [], 
+               createdAt: new Date().toISOString(),
+               updatedAt: new Date().toISOString()
+             } as Order;
+             parsedOrders.push(existingOrder);
+           }
+           
+           if (rawProductStr) {
+               existingOrder.products = existingOrder.products ? `${existingOrder.products}\n${productStrText}` : productStrText;
+               
+               const simplifiedName = simplifyProductName(rawProductStr);
+               const matchedOption = PRODUCT_OPTIONS.find(p => p.name === simplifiedName);
+               
+               if (!existingOrder.items) existingOrder.items = [];
+               
+               if (matchedOption) {
+                   existingOrder.items.push({
+                       id: Date.now().toString() + Math.random().toString().slice(2,8),
+                       name: matchedOption.name,
+                       quantity: quantity,
+                       unit: matchedOption.unit
+                   });
+               } else if (simplifiedName) {
+                   existingOrder.items.push({
+                       id: Date.now().toString() + Math.random().toString().slice(2,8),
+                       name: String(simplifiedName),
+                       quantity: quantity,
+                       unit: '件'
+                   });
+               }
+           }
+        });
+
+        if (parsedOrders.length === 0) {
+          alert('找不到符合的訂單資料。請確保 Excel 首列有包含類似「收件人」、「寄件編號」等欄位名稱。');
+          return;
+        }
+        
+        if (window.confirm(`成功讀取 ${parsedOrders.length} 筆訂單，確定要全部匯入嗎？\n(注意：這將會批次新增至待出貨名單中)`)) {
+           onSaveMultipleOrders(parsedOrders);
+           alert(`批次匯入指令已送出，請稍後檢查清單。`);
+        }
+      } catch (err) {
+        console.error('File parsing error:', err);
+        alert('檔案讀取失敗，請確認檔案格式是否正確。');
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsBinaryString(file);
   };
 
 
@@ -95,16 +235,32 @@ export default function ManageMode({
       </div>
 
       {subTab !== 'stats' && (
-        <button
-          onClick={() => {
-            setEditingOrder(null);
-            setIsAdding(true);
-          }}
-          className="w-full py-5 bg-slate-800 text-white rounded-[20px] text-2xl font-bold mb-2 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_2px_4px_-1px_rgba(0,0,0,0.06)] flex items-center justify-center gap-3 active:bg-slate-900 transition-all active:scale-[0.98]"
-        >
-          <Plus size={32} strokeWidth={2.5} />
-          新增一筆訂單
-        </button>
+        <div className="flex gap-2 mb-2 flex-col sm:flex-row">
+          <button
+            onClick={() => {
+              setEditingOrder(null);
+              setIsAdding(true);
+            }}
+            className="flex-1 py-5 bg-slate-800 text-white rounded-[20px] text-2xl font-bold shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1),0_2px_4px_-1px_rgba(0,0,0,0.06)] flex items-center justify-center gap-3 active:bg-slate-900 transition-all active:scale-[0.98]"
+          >
+            <Plus size={32} strokeWidth={2.5} />
+            新增一筆訂單
+          </button>
+          <input 
+            type="file" 
+            accept=".xlsx, .xls, .csv" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="py-5 px-6 bg-white border-2 border-slate-200 text-slate-800 rounded-[20px] text-xl font-bold shadow-sm flex items-center justify-center gap-2 active:bg-slate-50 transition-all active:scale-[0.98]"
+          >
+            <Upload size={24} strokeWidth={2.5} />
+            匯入 Excel
+          </button>
+        </div>
       )}
 
       {subTab === 'stats' ? (
@@ -325,12 +481,15 @@ function StatsView({ orders }: { orders: Order[] }) {
          
          {Object.keys(stats.results).length > 0 ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-               {Object.entries(stats.results).map(([name, data]) => (
-                  <div key={name} className="bg-[#FFFDF0] border border-[#FCE89B]/50 p-6 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm">
-                    <span className="text-2xl xl:text-3xl font-black text-amber-700 tracking-wider mb-1">{name}</span>
-                    <span className="text-5xl xl:text-6xl font-black text-amber-950 mt-1">{data.quantity} <span className="text-2xl text-amber-700/80 font-bold ml-1">{data.unit}</span></span>
-                  </div>
-               ))}
+               {Object.entries(stats.results).map(([name, val]) => {
+                  const data = val as { quantity: number, unit: string };
+                  return (
+                   <div key={name} className="bg-[#FFFDF0] border border-[#FCE89B]/50 p-6 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-sm">
+                     <span className="text-2xl xl:text-3xl font-black text-amber-700 tracking-wider mb-1">{name}</span>
+                     <span className="text-5xl xl:text-6xl font-black text-amber-950 mt-1">{data.quantity} <span className="text-2xl text-amber-700/80 font-bold ml-1">{data.unit}</span></span>
+                   </div>
+                  );
+               })}
             </div>
          ) : (
             <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl border border-dashed border-slate-300">
