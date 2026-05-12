@@ -14,16 +14,21 @@ const PRODUCT_OPTIONS = [
   { name: '胭脂蝦-中', unit: '公斤' },
   { name: '胭脂蝦-大', unit: '公斤' },
   { name: '胭脂蝦-特大', unit: '公斤' },
+  { name: '胭脂蝦-大600g', unit: '盒' },
   { name: '角蝦-小', unit: '公斤' },
   { name: '角蝦-中', unit: '公斤' },
   { name: '角蝦-大', unit: '公斤' },
   { name: '角蝦-特大', unit: '公斤' },
   { name: '透抽', unit: '包' },
   { name: '白蝦(大盒)', unit: '盒' },
+  { name: '白蝦 650g', unit: '盒' },
 ];
 
 const simplifyProductName = (rawName: string) => {
     let name = String(rawName || '');
+    if (name.includes('大600g') && name.includes('胭脂蝦')) return '胭脂蝦-大600g';
+    if (name.includes('650g') && name.includes('白蝦')) return '白蝦 650g';
+    
     if (name.includes('葡萄蝦')) name = '葡萄蝦';
     else if (name.includes('胭脂蝦')) name = '胭脂蝦';
     else if (name.includes('角蝦')) name = '角蝦';
